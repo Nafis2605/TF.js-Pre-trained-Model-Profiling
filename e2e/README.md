@@ -1,38 +1,20 @@
-# Usage
+## Benchmark Pre-Trained Models
 
-This package contains integration and e2e tests for TensorFlow.js.
+You can benchmark pre-trained models stored in your local file system using the following steps:
 
-## To run the tests in local:
+1. **Download the tool:**
+   ```bash
+   git clone [Link]
+   cd tfjs/e2e/benchmarks/
 
-### Filter tests by tag:
+# --- Step 2: Run a local HTTP server (from tfjs/e2e/benchmarks/) ---
+npx http-server
 
-```js
-export TAGS=#SMOKE,#REGRESSION,#GOLDEN
-yarn test
-```
+# --- Step 3: Open the benchmark in your browser ---
+# macOS:
+open http://127.0.0.1:8080/local-benchmark/
 
-### Filter tests by grep:
+# Windows (Command Prompt or PowerShell):
+start http://127.0.0.1:8080/local-benchmark/
 
-```js
-yarn test --grep cpu
-```
 
-## Add new tests:
-
-When creating new test, add at least one tag to the test description.
-
-Supported tags:
-
-- **SMOKE**:
-  Smoke tests should be light weight. Run in every PR and nightly
-  builds. Criteria for smoke test is that the test should run fast and only
-  test critical CUJ.
-- **REGRESSION**:
-  Regression tests compare results across backends, previous
-  builds, with other platform, etc. Run in nightly builds. Need additional
-  steps to run in local.
-- **GOLDEN**:
-  Golden tests validate pretrained model outputs against the prebuilt golden
-  outputs. Need additional steps to run in local.
-
-To add a new tag: Extend the TAGS list in integration_tests/util
