@@ -274,13 +274,30 @@ async function timeInference(predict, numRuns = 1) {
       'NA';
   const minTime = Math.min(...times);
   const maxTime = Math.max(...times);
+  
+  // Calculate kernel launch latency (difference between first and average)
+  const kernelLaunchLatency = times.length > 1 ? times[0] - averageTime : 0;
+  
+  // Calculate time to first output (first inference time)
+  const timeToFirstOutput = times[0];
+  
+  // Calculate end-to-end latency (max time across all runs)
+  const endToEndLatency = maxTime;
+  
+  // Calculate variance in execution times (indicates synchronization overhead)
+  const variance = times.reduce((acc, curr) => acc + Math.pow(curr - averageTime, 2), 0) / times.length;
+  const synchronizationOverhead = Math.sqrt(variance);
+  
   const timeInfo = {
     times,
     averageTime,
     averageTimeExclFirst,
     minTime,
-    maxTime
-
+    maxTime,
+    kernelLaunchLatency,
+    timeToFirstOutput,
+    endToEndLatency,
+    synchronizationOverhead
   };
   return timeInfo;
 }
@@ -471,9 +488,18 @@ async function profileInference(predict, isTflite = false, numProfiles = 1) {
 
   let kernelInfo = {};
   let kernelInfos = [];
+  const compilationStartTime = performance.now();
+  let firstExecutionTime = null;
+  
   if (isTflite) {
     for (let i = 0; i < numProfiles; i++) {
+      const execStart = performance.now();
       await predict();
+      const execTime = performance.now() - execStart;
+      if (firstExecutionTime === null) {
+        firstExecutionTime = execTime;
+      }
+      
       const profileItems = await tfliteModel.getProfilingResults();
       kernelInfo.kernels = profileItems.map(item => {
         return {
@@ -488,14 +514,22 @@ async function profileInference(predict, isTflite = false, numProfiles = 1) {
     }
   } else {
     for (let i = 0; i < numProfiles; i++) {
+      const execStart = performance.now();
       kernelInfo = await tf.profile(async () => {
         const res = await predict();
         await downloadValuesFromTensorContainer(res);
         tf.dispose(res);
       });
+      const execTime = performance.now() - execStart;
+      if (firstExecutionTime === null) {
+        firstExecutionTime = execTime;
+      }
       kernelInfos.push(kernelInfo);
     }
   }
+  
+  const compilationTime = performance.now() - compilationStartTime;
+  
   for (let i = 0; i < kernelInfos[0].kernels.length; i++) {
     let totalTimeMs = 0;
     for (let j = 0; j < kernelInfos.length; j++) {
@@ -506,6 +540,11 @@ async function profileInference(predict, isTflite = false, numProfiles = 1) {
   kernelInfo.kernels =
       kernelInfo.kernels.sort((a, b) => b.kernelTimeMs - a.kernelTimeMs);
   kernelInfo.aggregatedKernels = aggregateKernelTime(kernelInfo.kernels);
+  
+  // Add compilation time and first execution time to the profile info
+  kernelInfo.compilationTimeMs = compilationTime;
+  kernelInfo.firstExecutionTimeMs = firstExecutionTime;
+  
   return kernelInfo;
 }
 

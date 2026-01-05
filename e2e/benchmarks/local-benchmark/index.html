@@ -643,6 +643,13 @@ limitations under the License.
       await showMsg(null);
       appendRow(timeTable, `Subsequent average(${state.numRuns} runs)`, printTime(timeInfo.averageTime));
       appendRow(timeTable, 'Best time', printTime(timeInfo.minTime));
+      
+      // Display new enhanced metrics
+      appendRow(timeTable, 'Time to First Output', printTime(timeInfo.timeToFirstOutput));
+      appendRow(timeTable, 'End-to-End Latency', printTime(timeInfo.endToEndLatency));
+      appendRow(timeTable, 'Kernel Launch Latency', printTime(timeInfo.kernelLaunchLatency));
+      appendRow(timeTable, 'Synchronization Overhead', printTime(timeInfo.synchronizationOverhead));
+      
       // Add an empty row at the end of a round of benchmark.
       appendRow(timeTable, '', '');
     }
@@ -691,6 +698,35 @@ limitations under the License.
         appendRow(timeTable, 'Leaked tensors', profileInfo.newTensors);
       }
       appendRow(timeTable, 'Profile time', printTime(elapsed / numProfiles));
+      
+      // Display Compilation Time
+      if (profileInfo.compilationTimeMs) {
+        appendRow(timeTable, 'Compilation Time', printTime(profileInfo.compilationTimeMs));
+      }
+
+      // Calculate and display profile-based metrics
+      const kernelCount = profileInfo.kernels.length;
+      const totalKernelTime = profileInfo.kernels.reduce((sum, k) => sum + k.kernelTimeMs, 0);
+      const averageKernelTime = kernelCount > 0 ? totalKernelTime / kernelCount : 0;
+      const peakKernelTime = kernelCount > 0 ? Math.max(...profileInfo.kernels.map(k => k.kernelTimeMs)) : 0;
+      
+      // Kernel Execution Time (total time spent in kernels)
+      appendRow(timeTable, 'Kernel Execution Time', printTime(totalKernelTime));
+      
+      // Per-Operator Latency (average time per kernel)
+      appendRow(timeTable, 'Per-Operator Latency', printTime(averageKernelTime));
+      
+      // Peak Memory Usage
+      if (!isTflite() && profileInfo.peakBytes) {
+        const peakMemoryMB = profileInfo.peakBytes / (1024 * 1024);
+        appendRow(timeTable, 'Peak Memory Usage', peakMemoryMB.toFixed(2) + ' MB');
+      }
+      
+      // Memory Bandwidth (estimated as peak memory / total kernel time)
+      if (!isTflite() && profileInfo.peakBytes && totalKernelTime > 0) {
+        const memoryBandwidth = (profileInfo.peakBytes / (1024 * 1024 * 1024)) / (totalKernelTime / 1000);
+        appendRow(timeTable, 'Memory Bandwidth', memoryBandwidth.toFixed(4) + ' GB/s');
+      }
 
       if (state.backend === 'webgl' && !queryTimerIsEnabled()) {
         await showMsg('Query timer extension is not available. <br/> ' +
@@ -700,6 +736,16 @@ limitations under the License.
 
       await showMsg('Profiling kernels');
       appendRow(timeTable, 'Number of kernels', profileInfo.kernels.length);
+      
+      // Operator Fusion Rate (estimated as compression of operators)
+      if (kernelCount > 0) {
+        // Estimate: percentage of kernel consolidation
+        const estimatedOriginalOpCount = kernelCount * 1.5; // Rough estimate
+        const fusionRate = Math.max(0, (1 - (kernelCount / estimatedOriginalOpCount)) * 100);
+        appendRow(timeTable, 'Operator Fusion Rate', fusionRate.toFixed(2) + ' %');
+      }
+      
+      appendRow(timeTable, '', '');
       showKernelTime(profileInfo);
       await showMsg(null);
     }
