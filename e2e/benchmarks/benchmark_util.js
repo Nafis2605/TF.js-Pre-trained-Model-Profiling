@@ -745,3 +745,236 @@ async function getRendererInfo() {
   await tf.setBackend(curBackendName);
   return webglRenderer;
 }
+
+/**
+ * Collects all benchmark metrics into a single object for CSV export.
+ *
+ * @param {Object} benchmarkParams - The benchmark parameters (model, backend, etc)
+ * @param {Object} timeInfo - The timing information from timeInference
+ * @param {Object} profileInfo - The profiling information (optional)
+ * @returns {Object} A complete metrics object with all available metrics
+ */
+function collectAllMetrics(benchmarkParams, timeInfo, profileInfo = null) {
+  const timestamp = new Date().toISOString();
+
+  // Debug logging
+  console.log('=== collectAllMetrics CALLED ===');
+  console.log('profileInfo:', {
+    isNull: profileInfo === null,
+    isUndefined: profileInfo === undefined,
+    type: typeof profileInfo,
+    keys: profileInfo ? Object.keys(profileInfo) : null,
+    hasKernels: profileInfo && 'kernels' in profileInfo,
+    kernelCount: profileInfo && profileInfo.kernels ? profileInfo.kernels.length : 'N/A'
+  });
+
+  const metrics = {
+    timestamp,
+    model: benchmarkParams.benchmark || 'Unknown',
+    backend: benchmarkParams.backend || 'Unknown',
+    numRuns: benchmarkParams.numRuns || 1,
+
+    // Timing metrics
+    'Average Latency (ms)': timeInfo.averageTime ? timeInfo.averageTime.toFixed(2) : 'N/A',
+    'Average Latency Excl First (ms)': timeInfo.averageTimeExclFirst ? (typeof timeInfo.averageTimeExclFirst === 'number' ? timeInfo.averageTimeExclFirst.toFixed(2) : timeInfo.averageTimeExclFirst) : 'N/A',
+    'Min Latency (ms)': timeInfo.minTime ? timeInfo.minTime.toFixed(2) : 'N/A',
+    'Max Latency (ms)': timeInfo.maxTime ? timeInfo.maxTime.toFixed(2) : 'N/A',
+    'Time to First Output (ms)': timeInfo.timeToFirstOutput ? timeInfo.timeToFirstOutput.toFixed(2) : 'N/A',
+    'End-to-End Latency (ms)': timeInfo.endToEndLatency ? timeInfo.endToEndLatency.toFixed(2) : 'N/A',
+    'Kernel Launch Latency (ms)': timeInfo.kernelLaunchLatency ? timeInfo.kernelLaunchLatency.toFixed(2) : 'N/A',
+    'Synchronization Overhead (ms)': timeInfo.synchronizationOverhead ? timeInfo.synchronizationOverhead.toFixed(2) : 'N/A',
+  };
+
+  // Profile-based metrics
+  if (profileInfo) {
+    const kernelCount = profileInfo.kernels ? profileInfo.kernels.length : 0;
+    const totalKernelTime = profileInfo.kernels ?
+      profileInfo.kernels.reduce((sum, k) => sum + k.kernelTimeMs, 0) : 0;
+    const averageKernelTime = kernelCount > 0 ? (totalKernelTime / kernelCount) : 0;
+
+    metrics['Kernel Execution Time (ms)'] = totalKernelTime.toFixed(2);
+    metrics['Per-Operator Latency (ms)'] = averageKernelTime.toFixed(2);
+    metrics['Number of Kernels'] = kernelCount;
+    metrics['Compilation Time (ms)'] = profileInfo.compilationTimeMs ? profileInfo.compilationTimeMs.toFixed(2) : 'N/A';
+
+    // Memory metrics
+    if (profileInfo.peakBytes) {
+      const peakMemoryMB = profileInfo.peakBytes / (1024 * 1024);
+      metrics['Peak Memory Usage (MB)'] = peakMemoryMB.toFixed(2);
+
+      // Memory bandwidth
+      if (totalKernelTime > 0) {
+        const memoryBandwidth = (profileInfo.peakBytes / (1024 * 1024 * 1024)) / (totalKernelTime / 1000);
+        metrics['Memory Bandwidth (GB/s)'] = memoryBandwidth.toFixed(4);
+      } else {
+        metrics['Memory Bandwidth (GB/s)'] = 'N/A';
+      }
+    } else {
+      metrics['Peak Memory Usage (MB)'] = 'N/A';
+      metrics['Memory Bandwidth (GB/s)'] = 'N/A';
+    }
+
+    metrics['Leaked Tensors'] = profileInfo.newTensors || 'N/A';
+
+    // Operator fusion rate
+    if (kernelCount > 0) {
+      const estimatedOriginalOpCount = kernelCount * 1.5;
+      const fusionRate = Math.max(0, (1 - (kernelCount / estimatedOriginalOpCount)) * 100);
+      metrics['Operator Fusion Rate (%)'] = fusionRate.toFixed(2);
+    } else {
+      metrics['Operator Fusion Rate (%)'] = 'N/A';
+    }
+
+    // Add individual kernel metrics (top 10 by time)
+    console.log('About to check kernel extraction:', {
+      hasProfileInfo: !!profileInfo,
+      hasKernels: profileInfo && profileInfo.kernels ? true : false,
+      kernelsLength: profileInfo && profileInfo.kernels ? profileInfo.kernels.length : undefined,
+      metricsKeysCount: Object.keys(metrics).length
+    });
+
+    if (profileInfo && profileInfo.aggregatedKernels && profileInfo.aggregatedKernels.length > 0) {
+      console.log('Entering aggregated kernel extraction block');
+
+      // aggregatedKernels are already sorted by time (descending)
+      // Take top 5 unique kernels
+      const topKernels = profileInfo.aggregatedKernels.slice(0, 5);
+
+      console.log('Top 5 aggregated kernels:', topKernels);
+
+      topKernels.forEach((kernel, index) => {
+        const kernelNum = index + 1;
+        const kernelName = kernel.name || 'Unknown';
+        const kernelTime = kernel.timeMs ? kernel.timeMs.toFixed(2) : 'N/A';
+        metrics[`Kernel_${kernelNum}_Name`] = kernelName;
+        metrics[`Kernel_${kernelNum}_Time_ms`] = kernelTime;
+        console.log(`Set Kernel_${kernelNum}_Name = ${kernelName}, Kernel_${kernelNum}_Time_ms = ${kernelTime}`);
+      });
+
+      console.log('Kernel extraction complete');
+    } else {
+      console.log('No aggregated kernels found for extraction:', {
+        hasAggregatedKernels: profileInfo && profileInfo.aggregatedKernels ? true : false,
+        aggregatedKernelCount: profileInfo && profileInfo.aggregatedKernels ? profileInfo.aggregatedKernels.length : 0
+      });
+    }
+  } else {
+    metrics['Kernel Execution Time (ms)'] = 'N/A';
+    metrics['Per-Operator Latency (ms)'] = 'N/A';
+    metrics['Number of Kernels'] = 'N/A';
+    metrics['Compilation Time (ms)'] = 'N/A';
+    metrics['Peak Memory Usage (MB)'] = 'N/A';
+    metrics['Memory Bandwidth (GB/s)'] = 'N/A';
+    metrics['Leaked Tensors'] = 'N/A';
+    metrics['Operator Fusion Rate (%)'] = 'N/A';
+  }
+
+  return metrics;
+}
+
+/**
+ * Converts an object to a CSV row string.
+ *
+ * @param {Object} obj - The object to convert
+ * @param {Array<string>} headers - The headers to use
+ * @returns {string} A CSV row string
+ */
+function objectToCSVRow(obj, headers) {
+  return headers.map(header => {
+    const value = obj[header] || '';
+    // Escape quotes and wrap in quotes if contains comma, quote, or newline
+    const stringValue = String(value);
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return '"' + stringValue.replace(/"/g, '""') + '"';
+    }
+    return stringValue;
+  }).join(',');
+}
+
+/**
+ * Saves metrics to browser local storage as a CSV string.
+ * Updates existing CSV or creates a new one.
+ *
+ * @param {Object} metrics - The metrics object to save
+ * @returns {string} The complete CSV content
+ */
+function saveMetricsToLocalStorage(metrics) {
+  const storageKey = 'tfjs_benchmark_metrics_csv';
+
+  // Get existing CSV data from localStorage
+  let csvContent = localStorage.getItem(storageKey) || '';
+
+  // Define the headers in desired order
+  const headers = [
+    'timestamp',
+    'model',
+    'backend',
+    'numRuns',
+    'Average Latency (ms)',
+    'Average Latency Excl First (ms)',
+    'Min Latency (ms)',
+    'Max Latency (ms)',
+    'Time to First Output (ms)',
+    'End-to-End Latency (ms)',
+    'Kernel Launch Latency (ms)',
+    'Synchronization Overhead (ms)',
+    'Kernel Execution Time (ms)',
+    'Per-Operator Latency (ms)',
+    'Number of Kernels',
+    'Compilation Time (ms)',
+    'Peak Memory Usage (MB)',
+    'Memory Bandwidth (GB/s)',
+    'Leaked Tensors',
+    'Operator Fusion Rate (%)'
+  ];
+
+  // If CSV is empty, add headers
+  if (!csvContent || csvContent.trim() === '') {
+    csvContent = headers.join(',') + '\n';
+  }
+
+  // Add the new row
+  const newRow = objectToCSVRow(metrics, headers);
+  csvContent += newRow + '\n';
+
+  // Save back to localStorage
+  localStorage.setItem(storageKey, csvContent);
+
+  return csvContent;
+}
+
+/**
+ * Retrieves the metrics CSV from local storage.
+ *
+ * @returns {string} The complete CSV content
+ */
+function getMetricsCSV() {
+  const storageKey = 'tfjs_benchmark_metrics_csv';
+  return localStorage.getItem(storageKey) || '';
+}
+
+/**
+ * Exports the metrics CSV as a downloadable file.
+ *
+ * @param {string} filename - Optional filename for the download (default: 'benchmark_metrics.csv')
+ */
+function downloadMetricsCSV(filename = 'benchmark_metrics.csv') {
+  const csvContent = getMetricsCSV();
+
+  if (!csvContent || csvContent.trim() === '') {
+    console.warn('No metrics data available to download');
+    return;
+  }
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}

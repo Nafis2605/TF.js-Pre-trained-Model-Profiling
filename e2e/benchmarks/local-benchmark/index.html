@@ -314,6 +314,7 @@ limitations under the License.
     const modelInputsTable = document.querySelector('#modelInputs tbody');
 
     let model, tfliteModel, worker, tfliteWorkerAPI, predict, chartWidth;
+    let lastTimeInfo = null, lastProfileInfo = null;
 
     async function showMsg(message) {
       if (message != null) {
@@ -637,6 +638,9 @@ limitations under the License.
         timeInfo = await timeInference(() => predict(model), numRuns);
       }
 
+      // Store timeInfo for CSV export
+      lastTimeInfo = timeInfo;
+
       const forceInferenceTrendYMinToZero = true;
       populateTrendline(document.querySelector('#perf-trendline-container'), timeInfo.times, forceInferenceTrendYMinToZero, printTime);
 
@@ -656,6 +660,10 @@ limitations under the License.
 
     async function profileMemoryAndKernelTime() {
       if (state.numProfiles == 0) {
+        // Even if profiling is skipped, we still need to set lastProfileInfo to null
+        // so collectAllMetrics knows profiling wasn't done
+        lastProfileInfo = null;
+        console.log('Profiling skipped (numProfiles = 0)');
         return;
       }
       await showMsg('Profile memory and kernels');
@@ -689,6 +697,9 @@ limitations under the License.
       } else {
         profileInfo = await profileInference(() => predict(model), isTflite(), numProfiles);
       }
+
+      // Store profileInfo for CSV export
+      lastProfileInfo = profileInfo;
 
       const elapsed = performance.now() - start;
       await showMsg(null);
@@ -843,7 +854,68 @@ limitations under the License.
       await warmUp();
       await measureAveragePredictTime();
       await profileMemoryAndKernelTime();
+
+      // Save metrics to CSV
+      saveMetricsToCSV();
+
       urlState = null;
+    }
+
+    function saveMetricsToCSV() {
+      if (!lastTimeInfo) {
+        console.warn('No timing information available to save');
+        return;
+      }
+
+      const benchmarkParams = {
+        benchmark: state.benchmark,
+        backend: state.backend,
+        numRuns: state.numRuns
+      };
+
+      const metrics = collectAllMetrics(benchmarkParams, lastTimeInfo, lastProfileInfo);
+
+      // Send metrics to backend server
+      sendMetricsToServer(metrics);
+    }
+
+    function sendMetricsToServer(metrics) {
+      // Debug logging
+      console.log('Sending metrics to server:', {
+        timestamp: metrics.timestamp,
+        model: metrics.model,
+        kernelCount: metrics['Number of Kernels'],
+        kernel1_Name: metrics['Kernel_1_Name'],
+        kernel1_Time: metrics['Kernel_1_Time_ms']
+      });
+
+      // Try to send to metrics server
+      const metricsServerUrl = 'http://localhost:3001/api/metrics';
+
+      fetch(metricsServerUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(metrics)
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          console.log('✓ Metrics saved to benchmark_results.csv');
+        } else {
+          console.warn('Warning: Could not save metrics to file:', data.error);
+          // Fallback to localStorage if server is not available
+          saveMetricsToLocalStorage(metrics);
+          console.log('Metrics saved to browser storage as fallback');
+        }
+      })
+      .catch(error => {
+        console.warn('Metrics server not available, using browser storage fallback:', error.message);
+        // Fallback to localStorage if server is not available
+        saveMetricsToLocalStorage(metrics);
+        console.log('Metrics saved to browser storage as fallback');
+      });
     }
 
     function isParameterDefined(parameter) {
