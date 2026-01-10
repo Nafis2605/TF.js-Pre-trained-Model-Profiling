@@ -774,6 +774,10 @@ function collectAllMetrics(benchmarkParams, timeInfo, profileInfo = null) {
     backend: benchmarkParams.backend || 'Unknown',
     numRuns: benchmarkParams.numRuns || 1,
 
+    // New metrics: First inference and subsequent average
+    'First Inference Time (ms)': timeInfo.timeToFirstOutput ? timeInfo.timeToFirstOutput.toFixed(2) : 'N/A',
+    'Subsequent Average Latency (ms)': timeInfo.averageTimeExclFirst ? (typeof timeInfo.averageTimeExclFirst === 'number' ? timeInfo.averageTimeExclFirst.toFixed(2) : timeInfo.averageTimeExclFirst) : 'N/A',
+
     // Timing metrics
     'Average Latency (ms)': timeInfo.averageTime ? timeInfo.averageTime.toFixed(2) : 'N/A',
     'Average Latency Excl First (ms)': timeInfo.averageTimeExclFirst ? (typeof timeInfo.averageTimeExclFirst === 'number' ? timeInfo.averageTimeExclFirst.toFixed(2) : timeInfo.averageTimeExclFirst) : 'N/A',

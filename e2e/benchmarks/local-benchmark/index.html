@@ -850,16 +850,78 @@ limitations under the License.
       }
       await showBenchmarkingParameters();
 
+      // Start GPU monitoring
+      await startGPUMonitoring();
+
       await measureFirstPredictTime();
       await warmUp();
       await measureAveragePredictTime();
       await profileMemoryAndKernelTime();
+
+      // Stop GPU monitoring
+      await stopGPUMonitoring();
 
       // Save metrics to CSV
       saveMetricsToCSV();
 
       urlState = null;
     }
+
+    async function startGPUMonitoring() {
+      try {
+        const response = await fetch('http://localhost:3001/api/gpu/start', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: state.benchmark,
+            backend: state.backend
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✓ GPU monitoring started:', data.gpuInfo);
+        } else {
+          console.warn('GPU monitoring not available (expected for non-GPU systems)');
+        }
+      } catch (error) {
+        console.warn('Could not start GPU monitoring:', error.message);
+      }
+    }
+
+    async function stopGPUMonitoring() {
+      try {
+        const response = await fetch('http://localhost:3001/api/gpu/stop', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: state.benchmark,
+            backend: state.backend
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✓ GPU monitoring stopped');
+          console.log('GPU Metrics:', {
+            utilization: data.metrics.averageUtilization,
+            memory: data.metrics.averageMemory,
+            powerDraw: data.metrics.averagePower,
+            samplesCollected: data.metrics.samplesCollected
+          });
+        } else {
+          console.warn('GPU monitoring stop failed');
+        }
+      } catch (error) {
+        console.warn('Could not stop GPU monitoring:', error.message);
+      }
+    }
+
+
 
     function saveMetricsToCSV() {
       if (!lastTimeInfo) {

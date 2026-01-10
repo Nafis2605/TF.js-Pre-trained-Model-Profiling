@@ -1,335 +1,567 @@
-# TensorFlow.js Pre-trained Model Benchmarking System
+# TensorFlow.js Benchmark System - Complete Setup & Usage Guide
 
-## Overview
+Complete system for running TensorFlow.js benchmarks with automatic GPU metrics collection and CSV export.
 
-This benchmarking system profiles TensorFlow.js pre-trained models across different backends (WebGL, WebGPU, CPU, WASM, TFLite) and automatically exports comprehensive metrics to a CSV file.
+---
 
-## Recent Changes
+## Quick Start (60 seconds)
 
-### 1. Kernel Metrics Integration
-- **Top 5 Aggregated Kernels**: Each benchmark run now captures the top 5 time-consuming kernels by aggregated execution time
-- **Unique Kernel Names**: Kernels with the same name are aggregated (summed) together, eliminating duplicates
-- **Example**: If `FusedConv2D` executes 50 times taking 2ms each, the CSV shows `FusedConv2D: 100ms` (total)
+### macOS
+```bash
+cd /Users/fahim_arsad/Desktop/TF.js-Pre-trained-Model-Profiling/e2e/benchmarks
 
-### 2. Automatic CSV Export
-- Metrics are automatically saved to `benchmark_results.csv` after each benchmark run
-- No manual intervention required - exports happen in the background
-- Single persistent CSV file that grows with each run
+# Step 1: Setup GPU metrics (one-time, requires password)
+bash setup-gpu-metrics-macos.sh
 
-### 3. CSV Structure (30 columns)
-```
-Metadata (4):     timestamp, model, backend, numRuns
+# Step 2: Start servers
+bash quick-start.sh
 
-Timing (8):       Average Latency, Average Latency Excl First, Min, Max,
-                  Time to First Output, End-to-End Latency,
-                  Kernel Launch Latency, Synchronization Overhead
+# Step 3: Open browser
+open http://localhost:8080/local-benchmark/index.html
 
-Aggregates (8):   Kernel Execution Time, Per-Operator Latency,
-                  Number of Kernels, Compilation Time,
-                  Peak Memory Usage, Memory Bandwidth,
-                  Leaked Tensors, Operator Fusion Rate
-
-Kernels (10):     Top 5 Aggregated Kernels (name + time ms each)
+# Step 4: Run benchmark
+# - Select model (e.g., MobileNetV3)
+# - Select backend (e.g., webgl)
+# - Click "Run Benchmark"
+# - Results auto-saved to benchmark_results.csv
 ```
 
-## Quick Start
+### Linux / Windows
+```bash
+cd /path/to/TF.js-Pre-trained-Model-Profiling/e2e/benchmarks
 
-### 1. Start the Servers
+# Step 1: Verify NVIDIA drivers installed
+nvidia-smi
 
-Run this command in the `e2e/benchmarks/` directory:
+# Step 2: Start servers
+bash quick-start.sh
+
+# Step 3: Open browser
+http://localhost:8080/local-benchmark/index.html
+
+# Step 4: Run benchmark
+```
+
+---
+
+## Prerequisites
+
+### Required
+- **Node.js** v14 or higher
+  ```bash
+  node --version
+  ```
+
+### Optional (for GPU metrics)
+- **macOS**: `powermetrics` (built-in) + passwordless sudo setup
+- **Linux**: NVIDIA GPU + `nvidia-smi` drivers
+- **Windows**: NVIDIA GPU + `nvidia-smi` drivers
+
+---
+
+## Step-by-Step Setup
+
+### Step 1: Navigate to Directory
+
+```bash
+cd /Users/fahim_arsad/Desktop/TF.js-Pre-trained-Model-Profiling/e2e/benchmarks
+```
+
+### Step 2: GPU Setup (macOS Only, One-Time)
+
+This enables GPU power measurement.
+
+```bash
+bash setup-gpu-metrics-macos.sh
+```
+
+**What it does:**
+- Configures passwordless sudo for `powermetrics`
+- Prompts for macOS password once
+
+**Verify:**
+```bash
+sudo -n powermetrics -s gpu_power -n 1
+```
+
+Should output GPU power value like `GPU Power: 12 mW`
+
+If it asks for password: run setup script again
+
+### Step 3: Start Metrics Server
 
 ```bash
 bash quick-start.sh
 ```
 
-This will:
-- Start the Metrics Server on port 3001 (handles CSV exports)
-- Start the HTTP Server on port 8080 (serves the benchmark UI)
-- Auto-detect and resolve any port conflicts
-
-### 2. Open the Benchmark UI
-
-Open your browser to:
+**Expected output:**
 ```
-http://localhost:8080/local-benchmark/
+==========================================
+TF.js Benchmark - Auto CSV Export Setup
+==========================================
+
+✓ Metrics Server started on http://localhost:3001
+✓ HTTP Server started on http://localhost:8080
 ```
 
-### 3. Run a Benchmark
+**What runs:**
+- **Port 3001**: Metrics API server (receives benchmark data)
+- **Port 8080**: HTTP server (serves benchmark webpage)
 
-1. Select a model (MobileNetV3, MoveNet, etc.)
-2. Select a backend (WebGL, WebGPU, CPU, WASM, TFLite)
-3. Set the number of runs (e.g., 50)
-4. Click "Run Benchmark"
-5. Metrics are automatically saved to `benchmark_results.csv`
+### Step 4: Open Benchmark UI
 
-### 4. View Results
-
-The CSV file is located at:
-```
-/Users/fahim_arsad/Desktop/TF.js-Pre-trained-Model-Profiling/e2e/benchmarks/benchmark_results.csv
+```bash
+open http://localhost:8080/local-benchmark/index.html
 ```
 
-Open it with Excel, Google Sheets, or any text editor to view the results.
+Or in browser: `http://localhost:8080/local-benchmark/index.html`
 
-## Metrics Explanation
+---
 
-### Timing Metrics (milliseconds)
-- **Average Latency**: Mean time per inference run
-- **Average Latency Excl First**: Mean excluding the first (warmup) run
-- **Min/Max Latency**: Minimum and maximum observed latency
-- **Time to First Output**: Latency for the first inference
-- **End-to-End Latency**: Complete time from model load to result
-- **Kernel Launch Latency**: GPU/accelerator kernel scheduling overhead
-- **Synchronization Overhead**: Time spent waiting for GPU/accelerator synchronization
+## Running Benchmarks
 
-### Performance Metrics
-- **Kernel Execution Time**: Total time spent in all kernels (ms)
-- **Per-Operator Latency**: Average time per kernel operation
-- **Number of Kernels**: Total number of kernel operations
-- **Compilation Time**: Model compilation time (ms)
-- **Peak Memory Usage**: Maximum memory used (MB)
-- **Memory Bandwidth**: Estimated memory bandwidth (GB/s)
-- **Operator Fusion Rate**: Percentage of operator fusion optimization
+### Basic Workflow
 
-### Kernel Metrics
-- **Kernel_N_Name**: Name of the Nth most time-consuming kernel (aggregated)
-- **Kernel_N_Time_ms**: Total execution time for that kernel (ms)
+1. **Select Model**
+   - Dropdown menu with options: MobileNetV3, MobileNetV2, MoveNet, etc.
 
-Example:
+2. **Select Backend**
+   - Dropdown menu: webgl, webgpu, wasm, webnn
+
+3. **Configure Settings**
+   - **Runs**: Number of inference iterations (default: 50)
+   - **Warmup**: JIT compilation runs (default: 5, discarded from avg)
+   - **Profile**: How many runs to profile for kernel data (default: 1)
+
+4. **Click "Run Benchmark"**
+   - Watch console (F12) for progress
+   - Takes 30-120 seconds depending on run count
+
+5. **View Results**
+   - Console shows summary after completion
+   - CSV files updated automatically
+
+### Check Results
+
+```bash
+# View latest benchmark
+tail -1 benchmark_results.csv
+
+# View all benchmarks
+cat benchmark_results.csv
+
+# Open in Excel/Google Sheets
+open benchmark_results.csv
 ```
-Kernel_1_Name = FusedConv2D,      Kernel_1_Time_ms = 2.34
-Kernel_2_Name = Add,               Kernel_2_Time_ms = 1.87
-Kernel_3_Name = ResizeBilinear,    Kernel_3_Time_ms = 1.45
-Kernel_4_Name = DepthwiseConv2d,   Kernel_4_Time_ms = 0.89
-Kernel_5_Name = Transpose,         Kernel_5_Time_ms = 0.56
+
+---
+
+## CSV Output Files
+
+### File 1: `benchmark_results.csv`
+
+One row per benchmark run with all metrics.
+
+**Key Columns:**
+```
+timestamp           - When benchmark ran (ISO format)
+model              - Model name (e.g., MobileNetV3)
+backend            - Backend used (e.g., webgl)
+numRuns            - Number of runs
+First Inference Time (ms)          - Warmup/JIT compilation time
+Subsequent Average Latency (ms)    - Average of runs 2+ (excludes first)
+Average Latency (ms)               - Overall average
+Min Latency (ms)   - Fastest run
+Max Latency (ms)   - Slowest run
+Kernel Execution Time (ms)         - GPU kernel time
+Peak Memory Usage (MB)             - Max memory used
+gpu_utilization_percent            - Average GPU load %
+gpu_memory_utilization_percent     - Average GPU memory %
+gpu_power_draw_watts               - Average GPU power W
+Kernel_1_Name through Kernel_5_Name    - Top 5 kernels
+Kernel_1_Time_ms through Kernel_5_Time_ms - Kernel times
 ```
 
-## How It Works
+**View in terminal:**
+```bash
+# Last 1 row
+tail -1 benchmark_results.csv
 
-### Data Flow
+# First 3 rows (header + 2 data)
+head -3 benchmark_results.csv
 
-1. **Browser (Frontend)**
-   - User runs benchmark in `local-benchmark/index.html`
-   - `tf.profile()` captures kernel execution data
-   - Timing metrics calculated in `benchmark_util.js`
+# All rows
+cat benchmark_results.csv
+```
 
-2. **Metrics Collection**
-   - `collectAllMetrics()` aggregates all metrics
-   - Extracts top 5 aggregated kernels using `profileInfo.aggregatedKernels`
-   - Creates JSON object with 30 fields
+### File 2: `gpu_utilization_intervals.csv`
 
-3. **Backend (Node.js Server)**
-   - `metrics-server.js` receives JSON via POST request
-   - Maps JSON fields to CSV columns
-   - Appends row to `benchmark_results.csv`
+One-second GPU samples during each benchmark run.
 
-4. **Storage**
-   - Single persistent CSV file
-   - Grows with each benchmark run
-   - Backup created during schema migrations
+**Columns:**
+```
+timestamp                           - Benchmark start time
+model                              - Model being tested
+backend                            - Backend being tested
+timestamp_sec                      - Seconds into inference (1.05, 2.08, etc.)
+gpu_utilization_percent            - GPU load at this second
+gpu_memory_utilization_percent     - GPU memory % at this second
+gpu_power_draw_watts               - GPU power at this second
+memory_mb                          - System memory at this second
+```
 
-### Aggregation Logic
+**Example row:**
+```
+2026-01-10T10:30:45Z,MobileNetV3,webgl,1.05,75,60,11.2,8192
+```
 
-The `aggregateKernelTime()` function in `benchmark_util.js`:
-- Groups kernels by name
-- Sums execution times for identical kernel types
-- Sorts by total time (descending)
-- Returns top 5 unique kernels
+### File 3: `benchmark_metrics.csv`
 
-This ensures no duplicate kernel names in the CSV output.
+Alternative format. Same data as `benchmark_results.csv` in different column order.
+
+---
+
+## API Endpoints
+
+### Metrics Server (port 3001)
+
+**Check status:**
+```bash
+curl http://localhost:3001/api/gpu/status
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "gpuDetected": true,
+  "gpuVendor": "Apple",
+  "gpuName": "Apple M3",
+  "isMonitoring": false
+}
+```
+
+**Start GPU monitoring:**
+```bash
+curl -X POST http://localhost:3001/api/gpu/start \
+  -H "Content-Type: application/json" \
+  -d '{"model":"MobileNetV3","backend":"webgl"}'
+```
+
+**Stop GPU monitoring:**
+```bash
+curl -X POST http://localhost:3001/api/gpu/stop \
+  -H "Content-Type: application/json" \
+  -d '{"model":"MobileNetV3","backend":"webgl"}'
+```
+
+**Save metrics:**
+```bash
+curl -X POST http://localhost:3001/api/metrics \
+  -H "Content-Type: application/json" \
+  -d '{"timestamp":"2026-01-10T10:30:45Z","model":"MobileNetV3"}'
+```
+
+---
+
+## Troubleshooting
+
+### Port Already in Use
+
+```bash
+# Kill process on port 3001
+lsof -ti:3001 | xargs kill -9
+
+# Kill process on port 8080
+lsof -ti:8080 | xargs kill -9
+
+# Restart
+bash quick-start.sh
+```
+
+### GPU Power Shows "N/A"
+
+**macOS:**
+```bash
+# Test powermetrics
+sudo -n powermetrics -s gpu_power -n 1
+
+# If password prompt appears, reconfigure:
+bash setup-gpu-metrics-macos.sh
+```
+
+**Linux/Windows:**
+```bash
+# Verify nvidia-smi
+nvidia-smi --query-gpu=power.draw --format=csv,nounits,noheader
+```
+
+### Metrics Server Not Responding
+
+```bash
+# Check if running
+curl http://localhost:3001/
+
+# Kill and restart
+lsof -ti:3001 | xargs kill -9
+bash quick-start.sh
+```
+
+### Benchmark Page Not Loading
+
+```bash
+# Check HTTP server
+curl http://localhost:8080/
+
+# Restart
+bash quick-start.sh
+```
+
+### Benchmark Very Slow
+
+**Causes:**
+- Too many runs (start with 50)
+- Browser tab not focused (reduces performance)
+- Other apps using GPU
+
+**Solutions:**
+- Reduce number of runs
+- Focus browser tab
+- Close other applications
+
+---
+
+## Data Analysis Examples
+
+### Compare Backends
+
+```bash
+# Show all backend results
+awk -F',' 'NR>1 {print $2, $3, $7}' benchmark_results.csv | sort -u
+# Output: model backend average_latency
+```
+
+### Find Fastest Model
+
+```bash
+# Rank models by latency (ascending)
+awk -F',' 'NR>1 {print $2, $7}' benchmark_results.csv | sort -k2 -n | head -5
+```
+
+### Find Highest GPU Power
+
+```bash
+# Rank by GPU power consumption (descending)
+awk -F',' 'NR>1 {print $2, $3, $NF}' benchmark_results.csv | sort -k3 -nr | head -5
+```
+
+### Average GPU Utilization
+
+```bash
+# Calculate average GPU utilization
+awk -F',' 'NR>1 {sum+=$11; count++} END {print "Average: " sum/count "%"}' benchmark_results.csv
+```
+
+### Count Benchmarks by Model
+
+```bash
+# Show how many times each model was tested
+awk -F',' 'NR>1 {print $2}' benchmark_results.csv | sort | uniq -c
+```
+
+---
 
 ## File Structure
 
 ```
 benchmarks/
-├── README.md                      (This file)
-├── benchmark_util.js              (Core timing and metrics calculation)
-├── metrics-server.js              (Node.js backend for CSV export)
-├── migrate-csv.js                 (CSV schema migration utility)
-├── quick-start.sh                 (Server startup script)
-├── start-servers.sh               (Alternative startup script)
-├── benchmark_results.csv          (Output: All benchmark data)
-├── benchmark_results.backup.csv   (Backup of previous schema)
+├── README.md                      # This file - complete documentation
+├── quick-start.sh                 # Start metrics-server and HTTP server
+├── setup-gpu-metrics-macos.sh     # macOS GPU setup (one-time)
+├── metrics-server.js              # Node.js backend API (port 3001)
+├── gpu_metrics_collector.js       # GPU metrics module
+├── benchmark_util.js              # Benchmark utilities
+├── model_config.js                # Model configuration
+├── benchmark_results.csv          # Output: all benchmark data
+├── gpu_utilization_intervals.csv  # Output: 1-second GPU samples
+├── benchmark_metrics.csv          # Output: alternative format
 └── local-benchmark/
-    ├── index.html                 (Benchmark UI)
-    ├── index.js                   (UI logic)
-    ├── main.css                   (Styles)
-    └── util.js                    (Utility functions)
+    ├── index.html                 # Benchmark UI (open this)
+    ├── index.js                   # Benchmark controller
+    └── main.css                   # Styling
 ```
 
-## Key Functions
+---
 
-### benchmark_util.js
+## Essential Commands
 
-**`collectAllMetrics(benchmarkParams, timeInfo, profileInfo)`**
-- Collects all 30 metrics into a single object
-- Aggregates kernels and extracts top 5
-- Returns metrics object ready for CSV export
+```bash
+# Navigate to directory
+cd /Users/fahim_arsad/Desktop/TF.js-Pre-trained-Model-Profiling/e2e/benchmarks
 
-**`profileInference(predict, isTflite, numProfiles)`**
-- Profiles model inference using `tf.profile()`
-- Captures individual kernel data
-- Aggregates kernels by name and time
-- Returns `profileInfo` with:
-  - `kernels[]`: Individual kernel executions
-  - `aggregatedKernels[]`: Unique kernels with summed times
-  - `peakBytes`: Memory usage
-  - `compilationTimeMs`: Compilation time
+# Setup GPU (macOS, one-time)
+bash setup-gpu-metrics-macos.sh
 
-**`aggregateKernelTime(kernels)`**
-- Groups kernels by name
-- Sums execution times
-- Sorts by time (descending)
-- Used internally by `profileInference()`
+# Start servers
+bash quick-start.sh
 
-### metrics-server.js
+# Stop servers
+Ctrl+C in terminal
 
-**`handleRequest(req, res)`**
-- Listens on `POST /api/metrics`
-- Receives JSON metrics from frontend
-- Appends to CSV file
+# View results
+tail -1 benchmark_results.csv
+cat benchmark_results.csv
 
-**`createCSVRow(metrics)`**
-- Maps metrics object fields to CSV columns using headers
-- Handles CSV escaping for special characters
+# Check GPU status
+curl http://localhost:3001/api/gpu/status
 
-**`appendMetricsToCSV(metrics)`**
-- Writes metric row to `benchmark_results.csv`
+# Check ports in use
+lsof -i :3001
+lsof -i :8080
 
-## Troubleshooting
-
-### Port Already in Use
-**Error**: `EADDRINUSE: address already in use :::8080`
-
-**Solution**: 
-- Run `quick-start.sh` which auto-detects and frees ports
-- Or manually kill the process: `lsof -i :8080 | grep node | awk '{print $2}' | xargs kill -9`
-
-### Kernel Data Missing
-**Issue**: Benchmark runs but kernel metrics are empty
-
-**Causes**:
-1. `state.numProfiles` set to 0 - set to 1 or higher
-2. Backend doesn't support profiling (TFLite)
-3. Profiling timeout
-
-**Solution**: 
-- Check browser console (F12) for errors
-- Set Profile Runs to at least 1
-- Try a different backend
-
-### CSV File Not Updating
-**Issue**: New benchmark runs don't appear in CSV
-
-**Solution**:
-- Verify servers are running: `lsof -i :3001 -i :8080`
-- Check browser console for POST errors
-- Restart servers: `pkill -f metrics-server.js; bash quick-start.sh`
-
-### Large CSV File
-**Issue**: CSV file is very large after many benchmarks
-
-**Solution**:
-- Archive and backup: `cp benchmark_results.csv benchmark_results_backup_$(date +%s).csv`
-- Delete old rows in Excel/Sheets or with text editor
-- Create new CSV with headers for future runs
-
-## Performance Analysis Tips
-
-### Compare Across Backends
-```
-Filter CSV by model (e.g., MobileNetV3) and compare:
-- WebGL vs WebGPU: GPU acceleration performance
-- WebGL vs CPU: Hardware acceleration benefit
-- CPU vs WASM: CPU thread implementation comparison
+# Kill process on port
+lsof -ti:3001 | xargs kill -9
 ```
 
-### Track Kernel Performance
-```
-Monitor top kernel types to identify bottlenecks:
-- FusedConv2D: Convolution performance
-- DepthwiseConv2d: Depthwise convolution efficiency
-- Add, Mul: Element-wise operation cost
-- Transpose, Reshape: Memory reorganization cost
+---
+
+## How It Works
+
+1. **User runs benchmark in browser**
+   - Opens: http://localhost:8080/local-benchmark/index.html
+   - Selects model and backend
+   - Clicks "Run Benchmark"
+
+2. **Browser JavaScript code:**
+   - Tells metrics-server to start GPU monitoring
+   - Runs TensorFlow.js inference N times
+   - Collects kernel profiling data
+   - Tells metrics-server to stop GPU monitoring
+
+3. **GPU Monitoring (background):**
+   - Samples GPU utilization every second
+   - Records GPU memory usage
+   - Records GPU power draw
+
+4. **Metrics sent to server:**
+   - Browser sends all metrics to `POST http://localhost:3001/api/metrics`
+   - Server appends row to CSV files
+
+5. **User views results:**
+   - Opens `benchmark_results.csv`
+   - Analyzes GPU metrics in `gpu_utilization_intervals.csv`
+
+---
+
+## Core Components
+
+### `metrics-server.js`
+- Node.js HTTP server (port 3001)
+- Receives metrics from browser
+- Appends rows to CSV files
+- Provides GPU status endpoint
+
+### `gpu_metrics_collector.js`
+- Collects GPU metrics (utilization, memory, power)
+- Cross-platform: macOS (Metal), Linux (NVIDIA), Windows (NVIDIA)
+- Samples every second during monitoring
+- Returns average and min/max values
+
+### `benchmark_util.js`
+- TensorFlow.js profiling utilities
+- Measures inference latency
+- Profiles kernel execution
+- Tracks memory usage
+
+### `quick-start.sh`
+- Starts metrics-server (port 3001)
+- Starts HTTP server (port 8080)
+- Auto-kills any previous processes on those ports
+
+### `setup-gpu-metrics-macos.sh`
+- Configures passwordless sudo for `powermetrics`
+- Allows GPU power measurement without password prompts
+
+---
+
+## Platform Support
+
+| Platform | GPU Metrics | Setup Required |
+|----------|-------------|-----------------|
+| macOS | Yes (Metal) | `bash setup-gpu-metrics-macos.sh` |
+| Linux | Yes (NVIDIA) | NVIDIA drivers + `nvidia-smi` |
+| Windows | Yes (NVIDIA) | NVIDIA drivers + `nvidia-smi` |
+
+---
+
+## Typical Workflow
+
+### Single Quick Test
+```bash
+bash quick-start.sh
+open http://localhost:8080/local-benchmark/index.html
+# Select MobileNetV3 + webgl (defaults)
+# Click Run Benchmark
+tail -1 benchmark_results.csv
 ```
 
-### Memory Analysis
-```
-Correlate Peak Memory with:
-- Model size
-- Input dimensions
-- Backend type
-- Number of kernels
-```
-
-### Compilation vs Execution
-```
-Compare Compilation Time with Average Latency:
-- High compilation + low latency: Good, amortize compilation
-- High compilation + high latency: Inefficient backend
-- Low compilation + high latency: Runtime overhead issue
+### Compare Multiple Models
+```bash
+bash quick-start.sh
+# Run MobileNetV3 + webgl
+# Run MobileNetV3 + webgpu
+# Run MobileNetV2 + webgl
+# View results: cat benchmark_results.csv
 ```
 
-## Server Details
-
-### Metrics Server (Port 3001)
-- **Purpose**: Receives metrics from browser and saves to CSV
-- **Endpoints**:
-  - `POST /api/metrics` - Submit metrics
-  - `GET /api/metrics` - Retrieve full CSV content
-- **CSV Headers**: Automatically created on first run
-- **Data Format**: JSON request → CSV row
-
-### HTTP Server (Port 8080)
-- **Purpose**: Serves the benchmark UI
-- **Root**: Current directory (benchmarks/)
-- **Main File**: `local-benchmark/index.html`
-- **Requirements**: Node.js with npm installed
-
-## Architecture
-
-```
-Browser (Frontend)
-├─ Loads model via tf.js
-├─ Runs inference with measurements
-├─ Calls tf.profile() for kernel data
-└─ POSTs metrics JSON to metrics-server
-
-Metrics Server (Node.js Backend)
-├─ Receives JSON metrics
-├─ Maps to CSV format using headers
-└─ Appends to benchmark_results.csv
-
-CSV File (Persistent Storage)
-├─ Headers: 30 columns (metadata + metrics + kernels)
-├─ Rows: One per benchmark run
-└─ Data: Complete benchmark history
+### Analyze GPU Performance
+```bash
+bash quick-start.sh
+# Run several benchmarks
+# View GPU samples: cat gpu_utilization_intervals.csv
+# Analyze: awk commands (see examples above)
 ```
 
-## CSV Examples
+---
 
-### Row with Kernels Populated (WebGL)
-```
-2026-01-06T04:39:35.092Z,MobileNetV3,webgl,50,15.67,...,FusedConv2D,0.29,FusedConv2D,0.28,Mean,0.16,...
-```
+## Performance Tips
 
-### Row without Kernels (Old Format)
-```
-2026-01-06T00:59:35.595Z,MobileNetV3,webgl,50,14.35,...,N/A,33.33,,,,,
-```
+- **More runs = More stable average** (use 50-100 for typical testing)
+- **Warmup runs skip JIT compilation** (included in results but separate metric)
+- **Profile times add overhead** (use 1 for quick testing)
+- **Close other apps** for consistent measurements
+- **Keep browser focused** (TensorFlow.js throttles background tabs)
+
+---
 
 ## Next Steps
 
-1. **Run Benchmarks**: Use the UI to profile different models and backends
-2. **Analyze Results**: Open CSV in Excel/Sheets for data analysis
-3. **Track Progress**: Monitor kernel performance improvements over time
-4. **Compare Backends**: Identify fastest and most efficient configurations
-5. **Archive Data**: Backup CSV periodically for historical analysis
+1. **Run setup (macOS):**
+   ```bash
+   bash setup-gpu-metrics-macos.sh
+   ```
 
-## Support
+2. **Start servers:**
+   ```bash
+   bash quick-start.sh
+   ```
 
-For issues or questions:
-- Check browser console (F12) for JavaScript errors
-- Review this README for troubleshooting section
-- Verify servers are running and accessible
-- Check network connectivity for POST requests to metrics server
+3. **Open browser:**
+   ```bash
+   open http://localhost:8080/local-benchmark/index.html
+   ```
+
+4. **Run benchmark:**
+   - Select model: MobileNetV3
+   - Select backend: webgl
+   - Click: Run Benchmark
+
+5. **View results:**
+   ```bash
+   cat benchmark_results.csv
+   ```
+
+---
+
+**Version:** 2.0  
+**Last Updated:** January 10, 2026

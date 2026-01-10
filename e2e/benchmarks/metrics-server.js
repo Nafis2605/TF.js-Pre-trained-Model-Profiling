@@ -20,7 +20,20 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
+// Import GPU metrics collector if available
+let GPUMetricsCollector;
+try {
+  GPUMetricsCollector = require('./gpu_metrics_collector');
+} catch (e) {
+  console.warn('GPU metrics collector not available:', e.message);
+}
+
 const CSV_FILE_PATH = path.join(__dirname, 'benchmark_results.csv');
+const GPU_METRICS_CSV = path.join(__dirname, 'benchmark_metrics.csv');
+const GPU_INTERVALS_CSV = path.join(__dirname, 'gpu_utilization_intervals.csv');
+
+// Global GPU metrics collector instance
+let gpuCollector = null;
 
 // CSV Headers
 const CSV_HEADERS = [
@@ -28,6 +41,8 @@ const CSV_HEADERS = [
   'model',
   'backend',
   'numRuns',
+  'First Inference Time (ms)',
+  'Subsequent Average Latency (ms)',
   'Average Latency (ms)',
   'Average Latency Excl First (ms)',
   'Min Latency (ms)',
@@ -169,6 +184,165 @@ function handleRequest(req, res) {
     return;
   }
 
+  // Handle GPU metrics start endpoint
+  if (pathname === '/api/gpu/start' && req.method === 'POST') {
+    let body = '';
+
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        
+        if (!GPUMetricsCollector) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: false,
+            error: 'GPU metrics collector not available'
+          }));
+          return;
+        }
+
+        // Create new instance for this benchmark run (pass __dirname as path)
+        gpuCollector = new GPUMetricsCollector(__dirname);
+        gpuCollector.model = data.model || 'unknown';
+        gpuCollector.backend = data.backend || 'unknown';
+
+        gpuCollector.startMonitoring();
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          message: 'GPU monitoring started',
+          gpuInfo: {
+            vendor: gpuCollector.gpuVendor,
+            name: gpuCollector.gpuName
+          }
+        }));
+      } catch (error) {
+        console.error('Error starting GPU monitoring:', error);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: false,
+          error: error.message
+        }));
+      }
+    });
+    return;
+  }
+
+  // Handle GPU metrics stop endpoint
+  if (pathname === '/api/gpu/stop' && req.method === 'POST') {
+    let body = '';
+
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        
+        if (!gpuCollector) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: false,
+            error: 'No GPU monitoring active'
+          }));
+          return;
+        }
+
+        const metrics = gpuCollector.stopMonitoring();
+        
+        // Log GPU metrics for console output
+        console.log('\n========== GPU Metrics Summary ==========');
+        console.log(`Model: ${gpuCollector.model || 'unknown'}`);
+        console.log(`Backend: ${gpuCollector.backend || 'unknown'}`);
+        console.log(`GPU Vendor: ${gpuCollector.gpuVendor}`);
+        console.log(`GPU Name: ${gpuCollector.gpuName}`);
+        console.log(`Average GPU Utilization: ${metrics.gpu_utilization_percent || 'N/A'}%`);
+        console.log(`Average GPU Memory: ${metrics.gpu_memory_utilization_percent || 'N/A'}%`);
+        console.log(`Average GPU Power Draw: ${metrics.gpu_power_draw_watts || 'N/A'} W`);
+        console.log('==========================================\n');
+
+        // Append to CSV files with context
+        const contextData = {
+          timestamp: new Date().toISOString(),
+          model: gpuCollector.model || 'unknown',
+          backend: gpuCollector.backend || 'unknown'
+        };
+        
+        gpuCollector.appendIntervalMetrics(contextData);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          message: 'GPU monitoring stopped',
+          metrics: {
+            averageUtilization: metrics.gpu_utilization_percent,
+            averageMemory: metrics.gpu_memory_utilization_percent,
+            averagePower: metrics.gpu_power_draw_watts,
+            samplesCollected: gpuCollector.intervalSamples.length,
+            csvFiles: {
+              benchmarkMetrics: GPU_METRICS_CSV,
+              intervalMetrics: GPU_INTERVALS_CSV
+            }
+          }
+        }));
+      } catch (error) {
+        console.error('Error stopping GPU monitoring:', error);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: false,
+          error: error.message
+        }));
+      }
+    });
+    return;
+  }
+
+  // Handle GPU status endpoint
+  if (pathname === '/api/gpu/status' && req.method === 'GET') {
+    try {
+      if (!GPUMetricsCollector) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: false,
+          error: 'GPU metrics collector not available'
+        }));
+        return;
+      }
+
+      const tempCollector = new GPUMetricsCollector(__dirname);
+      const gpuVendor = tempCollector.gpuVendor;
+      const gpuName = tempCollector.gpuName;
+      const isMonitoring = gpuCollector !== null;
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        gpuDetected: gpuVendor !== 'Unknown',
+        gpuVendor: gpuVendor,
+        gpuName: gpuName,
+        isMonitoring: isMonitoring,
+        csvFiles: {
+          benchmarkMetrics: GPU_METRICS_CSV,
+          intervalMetrics: GPU_INTERVALS_CSV
+        }
+      }));
+    } catch (error) {
+      console.error('Error getting GPU status:', error);
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: false,
+        error: error.message
+      }));
+    }
+    return;
+  }
+
   // Handle metrics retrieval endpoint
   if (pathname === '/api/metrics' && req.method === 'GET') {
     try {
@@ -186,9 +360,26 @@ function handleRequest(req, res) {
     return;
   }
 
+  // Handle root path
+  if (pathname === '/' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      message: 'Metrics Server Running',
+      endpoints: {
+        'POST /api/metrics': 'Save benchmark metrics',
+        'GET /api/metrics': 'Retrieve all metrics (CSV)',
+        'POST /api/gpu/start': 'Start GPU monitoring',
+        'POST /api/gpu/stop': 'Stop GPU monitoring',
+        'GET /api/gpu/status': 'Check GPU status'
+      }
+    }));
+    return;
+  }
+
   // Default 404
   res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'Not found' }));
+  res.end(JSON.stringify({ error: 'Not found', path: pathname }));
 }
 
 // Create and start the server
