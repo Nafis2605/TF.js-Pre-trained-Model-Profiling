@@ -15,7 +15,7 @@ class GPUMetricsCollector {
     this.benchmarkDir = benchmarkDir;
     this.metricsFile = path.join(benchmarkDir, 'benchmark_metrics.csv');
     this.intervalsFile = path.join(benchmarkDir, 'gpu_utilization_intervals.csv');
-    
+
     // Monitoring state
     this.monitoring = false;
     this.intervalSamples = [];
@@ -24,11 +24,11 @@ class GPUMetricsCollector {
     this.gpuPowerValues = [];
     this.systemMemoryValues = [];
     this.monitoringThread = null;
-    
+
     // GPU info
     this.gpuVendor = this._detectGPUVendor();
     this.gpuName = this._detectGPUName();
-    
+
     // CSV headers
     this.benchmarkHeaders = [
       'timestamp', 'model', 'backend', 'end_to_end_latency_ms',
@@ -41,16 +41,16 @@ class GPUMetricsCollector {
       'gpu_vendor', 'gpu_name', 'gpu_utilization_percent',
       'gpu_memory_utilization_percent', 'gpu_power_draw_watts'
     ];
-    
+
     this.intervalsHeaders = [
       'timestamp', 'model', 'backend', 'timestamp_sec',
       'gpu_utilization_percent', 'gpu_memory_utilization_percent',
       'gpu_power_draw_watts', 'memory_mb'
     ];
-    
+
     this._initializeCSVFiles();
   }
-  
+
   /**
    * Detect GPU vendor based on platform
    */
@@ -62,7 +62,7 @@ class GPUMetricsCollector {
     }
     return 'Unknown';
   }
-  
+
   /**
    * Detect GPU name
    */
@@ -74,7 +74,7 @@ class GPUMetricsCollector {
           encoding: 'utf8',
           timeout: 5000
         });
-        
+
         const lines = output.split('\n');
         for (const line of lines) {
           if (line.includes('Chip') || line.includes('GPU')) {
@@ -88,12 +88,12 @@ class GPUMetricsCollector {
         const cmd = this.platform === 'win32'
           ? 'nvidia-smi --query-gpu=name --format=csv,noheader'
           : 'nvidia-smi --query-gpu=name --format=csv,noheader';
-        
+
         const output = execSync(cmd, {
           encoding: 'utf8',
           timeout: 3000
         });
-        
+
         return output.trim().split('\n')[0];
       }
     } catch (error) {
@@ -101,7 +101,7 @@ class GPUMetricsCollector {
     }
     return 'Unknown GPU';
   }
-  
+
   /**
    * Initialize CSV files with headers
    */
@@ -116,7 +116,7 @@ class GPUMetricsCollector {
         console.error(`✗ Error creating metrics file: ${error.message}`);
       }
     }
-    
+
     // Initialize gpu_utilization_intervals.csv
     if (!fs.existsSync(this.intervalsFile)) {
       try {
@@ -128,22 +128,22 @@ class GPUMetricsCollector {
       }
     }
   }
-  
+
   // ============================================================
   // macOS GPU Metrics (Apple Silicon)
   // ============================================================
-  
+
   _getGPUUtilizationMacOS() {
     try {
       const output = execSync('vm_stat', {
         encoding: 'utf8',
         timeout: 3000
       });
-      
+
       const lines = output.trim().split('\n');
       let totalPages = 0;
       let freePages = 0;
-      
+
       for (const line of lines) {
         if (line.includes('Pages free:')) {
           freePages = parseInt(line.split(':')[1].trim().split('.')[0]);
@@ -151,25 +151,25 @@ class GPUMetricsCollector {
           totalPages = parseInt(line.split(':')[1].trim().split('.')[0]);
         }
       }
-      
+
       if (totalPages > 0) {
         const utilization = ((totalPages - freePages) / totalPages) * 100;
         return Math.round(Math.max(0, Math.min(100, utilization)) * 100) / 100;
       }
-      
+
       return 'N/A';
     } catch (error) {
       return 'N/A';
     }
   }
-  
+
   _getGPUMemoryMacOS() {
     try {
       const output = execSync('system_profiler SPDisplaysDataType', {
         encoding: 'utf8',
         timeout: 5000
       });
-      
+
       const lines = output.split('\n');
       for (const line of lines) {
         if (line.includes('VRAM') || line.includes('Memory')) {
@@ -179,13 +179,13 @@ class GPUMetricsCollector {
           }
         }
       }
-      
+
       return this._getGPUUtilizationMacOS();
     } catch (error) {
       return 'N/A';
     }
   }
-  
+
   _getGPUPowerMacOS() {
     try {
       const output = execSync('sudo -n powermetrics -s gpu_power -n 1', {
@@ -193,7 +193,7 @@ class GPUMetricsCollector {
         timeout: 15000,
         stdio: ['pipe', 'pipe', 'pipe']
       });
-      
+
       const lines = output.split('\n');
       for (const line of lines) {
         if (line.includes('GPU Power')) {
@@ -201,17 +201,17 @@ class GPUMetricsCollector {
           if (match) {
             let value = parseFloat(match[1]);
             const unit = match[2];
-            
+
             // Convert mW to W if needed
             if (unit === 'mW') {
               value = value / 1000;
             }
-            
+
             return Math.round(value * 100) / 100;
           }
         }
       }
-      
+
       return 'N/A';
     } catch (error) {
       if (error.message.includes('sudo') || error.message.includes('permission')) {
@@ -221,11 +221,11 @@ class GPUMetricsCollector {
       return 'N/A';
     }
   }
-  
+
   // ============================================================
   // Linux/Windows GPU Metrics (NVIDIA)
   // ============================================================
-  
+
   _getGPUUtilizationNVIDIA() {
     try {
       const output = execSync(
@@ -235,7 +235,7 @@ class GPUMetricsCollector {
           timeout: 3000
         }
       );
-      
+
       return parseFloat(output.trim().split('\n')[0]);
     } catch (error) {
       if (error.message.includes('not found')) {
@@ -244,7 +244,7 @@ class GPUMetricsCollector {
       return 'N/A';
     }
   }
-  
+
   _getGPUMemoryNVIDIA() {
     try {
       const output = execSync(
@@ -254,13 +254,13 @@ class GPUMetricsCollector {
           timeout: 3000
         }
       );
-      
+
       return parseFloat(output.trim().split('\n')[0]);
     } catch (error) {
       return 'N/A';
     }
   }
-  
+
   _getGPUPowerNVIDIA() {
     try {
       const output = execSync(
@@ -270,18 +270,18 @@ class GPUMetricsCollector {
           timeout: 3000
         }
       );
-      
+
       const value = parseFloat(output.trim().split('\n')[0]);
       return Math.round(value * 100) / 100;
     } catch (error) {
       return 'N/A';
     }
   }
-  
+
   // ============================================================
   // Platform-Agnostic Methods
   // ============================================================
-  
+
   getGPUUtilization() {
     if (this.platform === 'darwin') {
       return this._getGPUUtilizationMacOS();
@@ -289,7 +289,7 @@ class GPUMetricsCollector {
       return this._getGPUUtilizationNVIDIA();
     }
   }
-  
+
   getGPUMemoryUtilization() {
     if (this.platform === 'darwin') {
       return this._getGPUMemoryMacOS();
@@ -297,7 +297,7 @@ class GPUMetricsCollector {
       return this._getGPUMemoryNVIDIA();
     }
   }
-  
+
   getGPUPowerDraw() {
     if (this.platform === 'darwin') {
       return this._getGPUPowerMacOS();
@@ -305,7 +305,7 @@ class GPUMetricsCollector {
       return this._getGPUPowerNVIDIA();
     }
   }
-  
+
   getSystemMemoryMB() {
     try {
       const totalMemory = os.totalmem();
@@ -316,11 +316,11 @@ class GPUMetricsCollector {
       return 'N/A';
     }
   }
-  
+
   // ============================================================
   // Monitoring Loop
   // ============================================================
-  
+
   startMonitoring() {
     this.monitoring = true;
     this.intervalSamples = [];
@@ -328,34 +328,34 @@ class GPUMetricsCollector {
     this.gpuMemoryValues = [];
     this.gpuPowerValues = [];
     this.systemMemoryValues = [];
-    
+
     this.monitoringThread = setInterval(() => {
       this._collectMetrics();
     }, 1000); // 1-second interval
-    
+
     console.log('✓ GPU monitoring started');
   }
-  
+
   _collectMetrics() {
     if (!this.monitoring) {
       return;
     }
-    
+
     try {
       const startTime = this.startTime || Date.now();
       const elapsed = (Date.now() - startTime) / 1000;
-      
+
       // Collect metrics
       const gpuUtil = this.getGPUUtilization();
       const gpuMem = this.getGPUMemoryUtilization();
       const gpuPower = this.getGPUPowerDraw();
       const memoryMB = this.getSystemMemoryMB();
-      
+
       // Convert to numeric if possible
       const gpuUtilNum = gpuUtil !== 'N/A' ? parseFloat(gpuUtil) : null;
       const gpuMemNum = gpuMem !== 'N/A' ? parseFloat(gpuMem) : null;
       const gpuPowerNum = gpuPower !== 'N/A' ? parseFloat(gpuPower) : null;
-      
+
       // Store sample
       const sample = {
         timestamp_sec: Math.round(elapsed * 100) / 100,
@@ -364,9 +364,9 @@ class GPUMetricsCollector {
         gpu_power_draw_watts: gpuPower,
         memory_mb: memoryMB
       };
-      
+
       this.intervalSamples.push(sample);
-      
+
       // Track numeric values for averaging
       if (gpuUtilNum !== null) {
         this.gpuUtilizationValues.push(gpuUtilNum);
@@ -381,16 +381,16 @@ class GPUMetricsCollector {
       console.error(`Monitoring error: ${error.message}`);
     }
   }
-  
+
   stopMonitoring() {
     this.monitoring = false;
     if (this.monitoringThread) {
       clearInterval(this.monitoringThread);
       this.monitoringThread = null;
     }
-    
+
     const metrics = {};
-    
+
     // Calculate averages
     if (this.gpuUtilizationValues.length > 0) {
       const avg = this.gpuUtilizationValues.reduce((a, b) => a + b, 0) / this.gpuUtilizationValues.length;
@@ -398,29 +398,29 @@ class GPUMetricsCollector {
     } else {
       metrics.gpu_utilization_percent = 'N/A';
     }
-    
+
     if (this.gpuMemoryValues.length > 0) {
       const avg = this.gpuMemoryValues.reduce((a, b) => a + b, 0) / this.gpuMemoryValues.length;
       metrics.gpu_memory_utilization_percent = Math.round(avg * 100) / 100;
     } else {
       metrics.gpu_memory_utilization_percent = 'N/A';
     }
-    
+
     if (this.gpuPowerValues.length > 0) {
       const avg = this.gpuPowerValues.reduce((a, b) => a + b, 0) / this.gpuPowerValues.length;
       metrics.gpu_power_draw_watts = Math.round(avg * 100) / 100;
     } else {
       metrics.gpu_power_draw_watts = 'N/A';
     }
-    
+
     console.log(`✓ GPU monitoring stopped (${this.intervalSamples.length} samples collected)`);
     return metrics;
   }
-  
+
   // ============================================================
   // CSV Operations
   // ============================================================
-  
+
   appendBenchmarkMetrics(benchmarkData) {
     try {
       const row = this.benchmarkHeaders.map(header => {
@@ -431,14 +431,14 @@ class GPUMetricsCollector {
         }
         return value;
       }).join(',');
-      
+
       fs.appendFileSync(this.metricsFile, row + '\n', 'utf8');
       console.log('✓ Appended to benchmark_metrics.csv');
     } catch (error) {
       console.error(`✗ Error appending benchmark metrics: ${error.message}`);
     }
   }
-  
+
   appendIntervalMetrics(intervalData) {
     try {
       let content = '';
@@ -451,17 +451,17 @@ class GPUMetricsCollector {
           }
           return value;
         }).join(',');
-        
+
         content += row + '\n';
       }
-      
+
       fs.appendFileSync(this.intervalsFile, content, 'utf8');
       console.log(`✓ Appended ${this.intervalSamples.length} samples to gpu_utilization_intervals.csv`);
     } catch (error) {
       console.error(`✗ Error appending interval metrics: ${error.message}`);
     }
   }
-  
+
   printMetricsSummary(model, backend, gpuMetrics) {
     console.log('\n' + '='.repeat(60));
     console.log(`GPU METRICS SUMMARY: ${model} (${backend})`);

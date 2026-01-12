@@ -195,7 +195,7 @@ function handleRequest(req, res) {
     req.on('end', () => {
       try {
         const data = JSON.parse(body);
-        
+
         if (!GPUMetricsCollector) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -244,7 +244,7 @@ function handleRequest(req, res) {
     req.on('end', () => {
       try {
         const data = JSON.parse(body);
-        
+
         if (!gpuCollector) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -255,7 +255,7 @@ function handleRequest(req, res) {
         }
 
         const metrics = gpuCollector.stopMonitoring();
-        
+
         // Log GPU metrics for console output
         console.log('\n========== GPU Metrics Summary ==========');
         console.log(`Model: ${gpuCollector.model || 'unknown'}`);
@@ -273,7 +273,7 @@ function handleRequest(req, res) {
           model: gpuCollector.model || 'unknown',
           backend: gpuCollector.backend || 'unknown'
         };
-        
+
         gpuCollector.appendIntervalMetrics(contextData);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });

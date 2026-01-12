@@ -563,5 +563,5 @@ bash quick-start.sh
 
 ---
 
-**Version:** 2.0  
+**Version:** 2.0
 **Last Updated:** January 10, 2026
