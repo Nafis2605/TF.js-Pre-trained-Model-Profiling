@@ -26,7 +26,32 @@ open http://localhost:8080/local-benchmark/index.html
 # - Results auto-saved to benchmark_results.csv
 ```
 
-### Linux / Windows
+### Windows (with NVIDIA GPU)
+```powershell
+# Open PowerShell as Administrator
+
+cd C:\path\to\TF.js-Pre-trained-Model-Profiling\e2e\benchmarks
+
+# Step 1: Verify NVIDIA drivers installed
+nvidia-smi
+
+# Step 2: Start servers (run in PowerShell)
+node metrics-server.js
+
+# Step 3: In another PowerShell window, start HTTP server
+npx http-server -p 8080
+
+# Step 4: Open browser
+start http://localhost:8080/local-benchmark/index.html
+
+# Step 5: Run benchmark
+# - Select model (e.g., MobileNetV3)
+# - Select backend (e.g., webgl)
+# - Click "Run Benchmark"
+# - Results auto-saved to benchmark_results.csv
+```
+
+### Linux (with NVIDIA GPU)
 ```bash
 cd /path/to/TF.js-Pre-trained-Model-Profiling/e2e/benchmarks
 
@@ -46,16 +71,38 @@ http://localhost:8080/local-benchmark/index.html
 
 ## Prerequisites
 
-### Required
+### Required (All Platforms)
 - **Node.js** v14 or higher
   ```bash
   node --version
   ```
+- **npm** (comes with Node.js)
+  ```bash
+  npm --version
+  ```
 
-### Optional (for GPU metrics)
-- **macOS**: `powermetrics` (built-in) + passwordless sudo setup
-- **Linux**: NVIDIA GPU + `nvidia-smi` drivers
-- **Windows**: NVIDIA GPU + `nvidia-smi` drivers
+### macOS Requirements
+- **macOS 10.15+** (Catalina or later)
+- **Apple Silicon or Intel processor**
+- `powermetrics` (built-in on all Macs)
+
+### Windows Requirements
+- **Windows 10/11** (64-bit)
+- **NVIDIA GPU** (GeForce, Quadro, or Tesla)
+- **NVIDIA Driver** (latest from https://www.nvidia.com/Download/driverDetails.aspx)
+- **NVIDIA CUDA Toolkit** (optional, for better GPU metrics)
+
+### Linux Requirements
+- **Ubuntu 18.04+** or compatible distro
+- **NVIDIA GPU** (GeForce, Quadro, or Tesla)
+- **NVIDIA Driver** and `nvidia-smi`
+  ```bash
+  sudo apt-get install nvidia-utils
+  ```
+
+### GPU Metrics Collection
+- **macOS**: GPU power measured via `powermetrics` (passwordless sudo)
+- **Windows/Linux**: GPU metrics from `nvidia-smi` (requires NVIDIA drivers)
 
 ---
 
@@ -63,11 +110,19 @@ http://localhost:8080/local-benchmark/index.html
 
 ### Step 1: Navigate to Directory
 
+**macOS / Linux:**
 ```bash
 cd /Users/fahim_arsad/Desktop/TF.js-Pre-trained-Model-Profiling/e2e/benchmarks
 ```
 
-### Step 2: GPU Setup (macOS Only, One-Time)
+**Windows:**
+```powershell
+cd C:\path\to\TF.js-Pre-trained-Model-Profiling\e2e\benchmarks
+```
+
+### Step 2: GPU Setup
+
+#### macOS Only (One-Time)
 
 This enables GPU power measurement.
 
@@ -88,33 +143,103 @@ Should output GPU power value like `GPU Power: 12 mW`
 
 If it asks for password: run setup script again
 
+#### Windows Only (First Time)
+
+**Step 2a: Install NVIDIA Driver**
+1. Download from: https://www.nvidia.com/Download/driverDetails.aspx
+2. Select your GPU model and Windows version
+3. Install and restart computer
+
+**Step 2b: Verify NVIDIA Driver**
+```powershell
+nvidia-smi
+```
+
+Expected output:
+```
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 535.00                 Driver Version: 535.00                    |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name                      | Bus-Id        Disp.A | Memory Usage         |
+|===============================+======================+======================|
+|   0  NVIDIA GeForce RTX 3090     | 00:1F.0       On     | 10GB / 24576MB       |
++-------------------------------+----------------------+----------------------+
+```
+
+If command not found: NVIDIA driver not installed properly
+
+**Step 2c: Verify CUDA (Optional)**
+```powershell
+nvidia-smi --query-gpu=name --format=csv,noheader
+```
+
+Should show your GPU name.
+
+#### Linux Only (First Time)
+
+**Step 2a: Install NVIDIA Driver**
+```bash
+sudo apt-get update
+sudo apt-get install nvidia-driver-550  # Or latest version
+sudo reboot
+```
+
+**Step 2b: Verify NVIDIA Driver**
+```bash
+nvidia-smi
+```
+
+Should show GPU info (similar to Windows output above)
+
+**Step 2c: Install nvidia-utils**
+```bash
+sudo apt-get install nvidia-utils
+```
+
 ### Step 3: Start Metrics Server
 
+**macOS / Linux (using quick-start.sh):**
 ```bash
 bash quick-start.sh
 ```
 
-**Expected output:**
-```
-==========================================
-TF.js Benchmark - Auto CSV Export Setup
-==========================================
+**Windows (Manual startup):**
 
-✓ Metrics Server started on http://localhost:3001
-✓ HTTP Server started on http://localhost:8080
+**Terminal 1: Start Metrics Server**
+```powershell
+node metrics-server.js
 ```
 
-**What runs:**
-- **Port 3001**: Metrics API server (receives benchmark data)
-- **Port 8080**: HTTP server (serves benchmark webpage)
+Expected output:
+```
+Metrics server listening on http://localhost:3001
+CSV file location: C:\path\...\benchmark_results.csv
+```
+
+**Terminal 2: Start HTTP Server**
+```powershell
+npx http-server -p 8080
+```
+
+Expected output:
+```
+Available on:
+  http://127.0.0.1:8080
+  http://<your-ip>:8080
+```
 
 ### Step 4: Open Benchmark UI
 
+**macOS:**
 ```bash
 open http://localhost:8080/local-benchmark/index.html
 ```
 
-Or in browser: `http://localhost:8080/local-benchmark/index.html`
+**Windows / Linux:**
+- Open browser and navigate to: `http://localhost:8080/local-benchmark/index.html`
+- Or click: `http://127.0.0.1:8080/local-benchmark/index.html`
+
+Should see benchmark UI with model/backend selectors
 
 ---
 
@@ -268,6 +393,7 @@ curl -X POST http://localhost:3001/api/metrics \
 
 ### Port Already in Use
 
+**macOS / Linux:**
 ```bash
 # Kill process on port 3001
 lsof -ti:3001 | xargs kill -9
@@ -277,6 +403,26 @@ lsof -ti:8080 | xargs kill -9
 
 # Restart
 bash quick-start.sh
+```
+
+**Windows:**
+```powershell
+# Find process on port 3001
+netstat -ano | findstr :3001
+
+# Kill process (replace PID)
+taskkill /PID <PID> /F
+
+# Find process on port 8080
+netstat -ano | findstr :8080
+
+# Kill process (replace PID)
+taskkill /PID <PID> /F
+
+# Restart servers manually
+node metrics-server.js
+# In another window:
+npx http-server -p 8080
 ```
 
 ### GPU Power Shows "N/A"
@@ -290,14 +436,30 @@ sudo -n powermetrics -s gpu_power -n 1
 bash setup-gpu-metrics-macos.sh
 ```
 
-**Linux/Windows:**
-```bash
-# Verify nvidia-smi
+**Windows:**
+```powershell
+# Verify nvidia-smi shows power
 nvidia-smi --query-gpu=power.draw --format=csv,nounits,noheader
+
+# If empty or "N/A":
+# 1. Update NVIDIA driver from: https://www.nvidia.com/Download/driverDetails.aspx
+# 2. Restart computer
+# 3. Try again
+```
+
+**Linux:**
+```bash
+# Verify nvidia-smi shows power
+nvidia-smi --query-gpu=power.draw --format=csv,nounits,noheader
+
+# If empty or "N/A":
+sudo apt-get install --reinstall nvidia-driver-550
+sudo reboot
 ```
 
 ### Metrics Server Not Responding
 
+**macOS / Linux:**
 ```bash
 # Check if running
 curl http://localhost:3001/
@@ -307,8 +469,18 @@ lsof -ti:3001 | xargs kill -9
 bash quick-start.sh
 ```
 
+**Windows:**
+```powershell
+# Check if running
+Invoke-WebRequest http://localhost:3001/
+
+# If error, manually start:
+node metrics-server.js
+```
+
 ### Benchmark Page Not Loading
 
+**macOS / Linux:**
 ```bash
 # Check HTTP server
 curl http://localhost:8080/
@@ -317,17 +489,87 @@ curl http://localhost:8080/
 bash quick-start.sh
 ```
 
+**Windows:**
+```powershell
+# Check HTTP server
+Invoke-WebRequest http://localhost:8080/
+
+# If error, manually start:
+npx http-server -p 8080
+```
+
+### Node.js Command Not Found (Windows)
+
+```powershell
+# Verify Node.js installed
+node --version
+
+# If not found:
+# 1. Download from: https://nodejs.org/
+# 2. Install (choose latest LTS)
+# 3. Restart PowerShell
+# 4. Verify: node --version
+```
+
+### npm not found (Windows)
+
+```powershell
+# npm should be installed with Node.js
+npm --version
+
+# If missing:
+# 1. Reinstall Node.js from https://nodejs.org/
+# 2. Make sure "npm package manager" is checked during install
+# 3. Restart computer
+```
+
+### NVIDIA Driver Issues (Windows)
+
+**Symptom: `nvidia-smi: command not found`**
+1. Download latest driver: https://www.nvidia.com/Download/driverDetails.aspx
+2. Select your GPU and Windows version
+3. Install and restart
+4. Verify: `nvidia-smi`
+
+**Symptom: GPU not detected**
+```powershell
+# Verify GPU is recognized
+nvidia-smi
+
+# Check Device Manager: Win+X → Device Manager → Display adapters
+# Should show your NVIDIA GPU
+
+# If not showing:
+# - GPU may not be enabled in BIOS (restart → BIOS → Enable GPU)
+# - Try different GPU slot (if multiple)
+# - Update motherboard BIOS
+```
+
+### PowerShell Execution Policy (Windows)
+
+**If you see: "cannot be loaded because running scripts is disabled"**
+
+```powershell
+# Check current policy
+Get-ExecutionPolicy
+
+# Change policy (requires Admin)
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
 ### Benchmark Very Slow
 
 **Causes:**
 - Too many runs (start with 50)
 - Browser tab not focused (reduces performance)
 - Other apps using GPU
+- First run includes JIT compilation
 
 **Solutions:**
 - Reduce number of runs
 - Focus browser tab
 - Close other applications
+- Run warmup runs first (default 5)
 
 ---
 
@@ -486,17 +728,34 @@ lsof -ti:3001 | xargs kill -9
 
 ## Platform Support
 
-| Platform | GPU Metrics | Setup Required |
-|----------|-------------|-----------------|
-| macOS | Yes (Metal) | `bash setup-gpu-metrics-macos.sh` |
-| Linux | Yes (NVIDIA) | NVIDIA drivers + `nvidia-smi` |
-| Windows | Yes (NVIDIA) | NVIDIA drivers + `nvidia-smi` |
+| Platform | GPU Support | GPU Metrics | Setup Required |
+|----------|-------------|-------------|-----------------|
+| **macOS** (Apple/Intel) | Apple Metal | Yes | `bash setup-gpu-metrics-macos.sh` |
+| **Windows** (NVIDIA) | CUDA/Optimus | Yes | NVIDIA driver install |
+| **Linux** (NVIDIA) | CUDA | Yes | NVIDIA driver + nvidia-utils |
+
+### macOS
+- GPU power measured via `powermetrics` (passwordless sudo required)
+- Supports Apple Silicon (M1/M2/M3) and Intel Macs
+- Best GPU metrics accuracy
+
+### Windows
+- GPU metrics from `nvidia-smi` command
+- Supports GeForce, Quadro, and Tesla GPUs
+- Requires latest NVIDIA driver
+- Both 64-bit Windows 10 and 11 supported
+
+### Linux
+- GPU metrics from `nvidia-smi` command
+- Supports GeForce, Quadro, and Tesla GPUs
+- Requires NVIDIA driver + nvidia-utils package
+- Ubuntu 18.04+ and other distros supported
 
 ---
 
 ## Typical Workflow
 
-### Single Quick Test
+### Single Quick Test (macOS / Linux)
 ```bash
 bash quick-start.sh
 open http://localhost:8080/local-benchmark/index.html
@@ -505,7 +764,33 @@ open http://localhost:8080/local-benchmark/index.html
 tail -1 benchmark_results.csv
 ```
 
-### Compare Multiple Models
+### Single Quick Test (Windows)
+```powershell
+node metrics-server.js
+# In another PowerShell window:
+npx http-server -p 8080
+# Open browser: http://localhost:8080/local-benchmark/index.html
+# Run benchmark
+Get-Content benchmark_results.csv | Select-Object -Last 1
+```
+
+### Compare Multiple Models (macOS / Linux)
+```bash
+bash quick-start.sh
+# Run MobileNetV3 + webgl
+# Run MobileNetV3 + webgpu
+# Run MobileNetV2 + webgl
+# View results: cat benchmark_results.csv
+```
+
+### Compare Multiple Models (Windows)
+```powershell
+node metrics-server.js
+# In another window:
+npx http-server -p 8080
+# Run benchmarks via browser
+# View results: Get-Content benchmark_results.csv
+```
 ```bash
 bash quick-start.sh
 # Run MobileNetV3 + webgl
@@ -534,15 +819,163 @@ bash quick-start.sh
 
 ---
 
+## Windows-Specific GPU Metrics Guide
+
+### GPU Detection on Windows
+
+The system automatically detects NVIDIA GPUs via `nvidia-smi`. Make sure:
+
+```powershell
+# 1. Verify GPU is detected
+nvidia-smi
+
+# Output should show:
+# NVIDIA GeForce RTX 3090, RTX 4090, or your GPU name
+# Driver Version: 535.xx or higher
+```
+
+### GPU Metrics Collected on Windows
+
+**Real-time metrics (1-second intervals):**
+- `gpu_utilization_percent` - GPU computation load (0-100%)
+- `gpu_memory_utilization_percent` - GPU VRAM usage (0-100%)
+- `gpu_power_draw_watts` - GPU power consumption (watts)
+- `memory_mb` - System RAM usage
+
+**Example Windows GPU output:**
+```csv
+timestamp,model,backend,timestamp_sec,gpu_utilization_percent,gpu_memory_utilization_percent,gpu_power_draw_watts,memory_mb
+2026-01-11T14:22:45Z,MobileNetV3,webgl,1.05,85,72,245.5,8192
+2026-01-11T14:22:45Z,MobileNetV3,webgl,2.08,82,71,243.2,8256
+```
+
+### Windows GPU Requirements
+
+**GPU Support:**
+- NVIDIA GeForce (GTX 1000+, RTX series)
+- NVIDIA Quadro
+- NVIDIA Tesla
+
+**Not supported:**
+- Integrated Intel Graphics
+- AMD/Intel Arc GPUs
+- NVIDIA Kepler generation (too old)
+
+**Driver Version:**
+- Minimum: 450.00
+- Recommended: Latest from nvidia.com
+- Download: https://www.nvidia.com/Download/driverDetails.aspx
+
+### Checking GPU Power Draw on Windows
+
+```powershell
+# View current GPU power draw
+nvidia-smi --query-gpu=power.draw --format=csv,nounits,noheader
+
+# View power draw limit
+nvidia-smi --query-gpu=power.max_limit --format=csv,nounits,noheader
+
+# Example output:
+# 250.00  <- Current power (watts)
+# 320     <- Max limit (watts)
+```
+
+### Common Windows GPU Issues
+
+**Issue: GPU shows 0% utilization during benchmarks**
+- Solution: Verify GPU is being used by checking nvidia-smi during benchmark
+- If 0%: Might be using CPU instead, check browser backend selection
+
+**Issue: GPU power draw is 0W**
+- Some older GPU models don't support power reading
+- Workaround: Monitor in NVIDIA Control Panel instead
+
+**Issue: GPU memory constantly at 100%**
+- Normal during large model benchmarks
+- Clear browser cache between tests: Ctrl+Shift+Delete → Clear Cache
+
+---
+
 ## Next Steps
 
-1. **Run setup (macOS):**
+### macOS:
+1. **Run setup (one-time):**
    ```bash
    bash setup-gpu-metrics-macos.sh
    ```
 
 2. **Start servers:**
    ```bash
+   bash quick-start.sh
+   ```
+
+3. **Open browser:**
+   ```bash
+   open http://localhost:8080/local-benchmark/index.html
+   ```
+
+4. **Run benchmark:**
+   - Select model: MobileNetV3
+   - Select backend: webgl
+   - Click: Run Benchmark
+
+5. **View results:**
+   ```bash
+   cat benchmark_results.csv
+   ```
+
+### Windows:
+1. **Verify GPU:**
+   ```powershell
+   nvidia-smi
+   ```
+
+2. **Start Metrics Server:**
+   ```powershell
+   node metrics-server.js
+   ```
+
+3. **Start HTTP Server (new PowerShell window):**
+   ```powershell
+   npx http-server -p 8080
+   ```
+
+4. **Open browser:**
+   - Navigate to: `http://localhost:8080/local-benchmark/index.html`
+
+5. **Run benchmark:**
+   - Select model: MobileNetV3
+   - Select backend: webgl
+   - Click: Run Benchmark
+
+6. **View results:**
+   ```powershell
+   Get-Content benchmark_results.csv | Select-Object -Last 10
+   ```
+
+### Linux:
+1. **Verify GPU:**
+   ```bash
+   nvidia-smi
+   ```
+
+2. **Start servers:**
+   ```bash
+   bash quick-start.sh
+   ```
+
+3. **Open browser:**
+   - Navigate to: `http://localhost:8080/local-benchmark/index.html`
+
+4. **Run benchmark:**
+   - Select model: MobileNetV3
+   - Select backend: webgl
+   - Click: Run Benchmark
+
+5. **View results:**
+   ```bash
+   tail -10 benchmark_results.csv
+   ```
    bash quick-start.sh
    ```
 
